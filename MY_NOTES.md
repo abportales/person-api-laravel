@@ -386,3 +386,231 @@ $report = [
     //endpoint of battle system
     Route::get('bs/{heroId}/{enemyId}', 'APIController@runManulBattleSys');
     
+# APIRESFUL, DESDE CERO
+
+ - se crea el proyecto
+ - levantamos nuestro servidor con xampp
+ - creamos la base de datos en mysql con el nombre: 'person-api'
+ - en laravel modificamos el .env en DB_DATABASE=NAME
+
+## crearemos la tabla persona:
+    php artisan make:migration create_people_table --create=people
+
+## vamos a database>la table creada, agregamos los campos de la tabla
+
+    public function up()
+    {
+        Schema::create('people', function (Blueprint $table) {
+            $table->id();
+            $table->string('firstName');
+            $table->string('lastName');
+            $table->integer('documentNumber');
+            $table->string('city');
+            $table->string('country');
+            $table->string('street');
+            $table->string('number');
+            $table->boolean('single');
+            $table->timestamps();
+        });
+    }
+
+## publicamos la tabla en SQL (opcional, podemos borrar las 2 tablas que genera laravel, [users y jobs])
+    php artisan migrate
+
+## crearemos nuestro modelo (model y singular y pascal-case)
+    php artisan make:model Person
+
+## vamos a app>Person.php y agregamos la tabla a la uqe hace referencia:
+    protected $table = "people";
+
+## ahora creamos el controllador con todos los verbs, por eso usamos el --resource, se creara en app>http>controllers
+    php artisan make:controller PersonController --resource
+
+## tengamos en cuenta que al tener el controller de esta forma, casi cada metodo representara una interaccion directa
+## con la api, index con GET, store con PUT, destroy con DELETE etc. solo queda definir nuestra comunicacion con las
+## rutas:
+    Route::resource('person', 'PersonController');
+
+## como ejemplo y verificación podemos incluir una vista basica en el index del controlador
+    return 'get persona'
+## y ahora vamos al browser para visualizarlo, (no olvidemos /api/ )
+    http://127.0.0.1:8000/api/person
+
+## si no tenemmos ningun error ahora podemos darle formato a nuestra respuesta.
+    public function index()
+    {
+        $people = Person::all();
+        
+        $res = [
+            'status' => 'ok',
+            'message' => 'lista de personas',
+            'code' => 1000,
+            'data' => $people
+        ];
+
+        return $res;
+        // return 'people';
+    }
+
+## y validar con postman, tirando a la url:
+    http://127.0.0.1:8000/api/person
+
+## tambien podemos eliminar los métodos que tengan que ver con la vista, ya que no los usaremos.
+- create
+- edit
+
+## para validar variables y asi filtrar la accion que se hara, podemos usar dd($var), verificar que da en postman, (pestaña preview)
+# y vemos que muestra null, podemos usar el isset (recordemos que se usa para validar si la variable el null y retorna un boolean)
+
+## GET / SHOW
+
+## en codigo:
+    public function show($id)
+    {
+        $person = Person::find($id);
+
+        if(isset($person)){
+            $res = [
+                'status' => 'ok',
+                'message' => 'Obteniendo persona por id: ' . $id,
+                'code' => 1001,
+                'data' => $person
+            ];
+        } else {    
+            $res = [
+                'status' => 'error',
+                'message' => 'No se encontro la persona con id: ' . $id,
+                'code' => 1011,
+                'data' => $person
+            ];
+        }
+        return $res;
+    }
+
+## POST / STORE
+
+### para esto necesitamos un objeto json, y eso se logra con:
+    $person = $request->json()->all();
+    dd($person);
+### para visualizarlo en postman, tenemos que hacer un 'POST', opcion body, >RAW luego en Text>json agregamos los datos con el mismo formato
+### de lo campos
+{
+    "firstName": "monse",
+    "lastName": "malagon",
+    "documentNumber": 3131,
+    "city": "mexico",
+    "country": "slp",
+    "street": "muro",
+    "number": "123",
+    "single": 0
+}
+### ahora send y podemos verificar ahi mismo la respuesta, con preview, y deberia ser la misma que enviamos.
+
+### en codigo quedaria algo asi: se recomienda responder con el objeto creado, y su respectivo formato json.
+    $person = new Person();
+    $person->firstName = $jsonPerson["firstName"];
+    $person->lastName = $jsonPerson["lastName"];
+    $person->documentNumber = $jsonPerson["documentNumber"];
+    $person->city = $jsonPerson["city"];
+    $person->country = $jsonPerson["country"];
+    $person->street = $jsonPerson["street"];
+    $person->number = $jsonPerson["number"];
+    $person->single = $jsonPerson["single"];
+
+    $person->save();
+
+    $res = [
+        'status' => 'ok',
+        'message' => 'persona creada ',
+        'code' => 1003,
+        'data' => $person
+    ];
+
+    return $res;
+
+### podemos simplificar todo esto pasando en el constructor y poner los atributos fillable, en el modelo:
+#### controller    
+    $jsonPerson = $request->json()->all();
+    $person = new Person($jsonPerson);
+    $person->save();
+#### model
+    class Person extends Model
+    {
+        protected $table = 'people';
+        protected $fillable = [
+            "firstName",
+            "lastName",
+            "documentNumber",
+            "city",        
+            "country",
+            "street", 
+            "number", 
+            "single" 
+        ];
+    }
+
+## si queremos ocultar campos, en el mismo model agregamos:
+    ...
+    protected $hidden = [
+        "created_at", 
+        "updated_at"
+    ];
+    ...
+
+## DELETE / DESTROY
+## para borrar no hay consideraciones especiales, solo generar el codigo y su flujo:
+    public function destroy($id)
+    {
+        $person = Person::find($id);
+
+        if(isset($person)){
+            $person->delete();
+            $res = [
+                'status' => 'ok',
+                'message' => 'persona con id: ' . $id . " eliminada",
+                'code' => 1004,
+            ];
+        } else {
+            $res = [
+                'status' => 'error',
+                'message' => 'persona con id: ' . $id . " no encontrada.",
+                'code' => 1014,
+            ];
+        }
+        
+        return $res;
+    }
+
+## PUT / UPDATE
+
+## basicamente funciona como un store, pero con el request put, y solo se mandan los campos a modificar.
+## POSTMAN: PUT / url / Body / raw / text > json / agregar:
+{
+    "firstName": "Viri",
+    "street": "tecnologos",
+    "number": "69"
+}
+
+## en el controller
+
+    public function update(Request $request, $id)
+    {
+        $person = Person::find($id);
+
+        if(isset($person)){
+            $person->update($request->json()->all());
+            $res = [
+                'status' => 'ok',
+                'message' => 'persona con id: ' . $id . " actualizada",
+                'code' => 1005,
+            ];
+        } else {
+            $res = [
+                'status' => 'error',
+                'message' => 'persona con id: ' . $id . " no encontrada para actualizar.",
+                'code' => 1015,
+            ];
+        }
+        
+        return $res;
+    }
